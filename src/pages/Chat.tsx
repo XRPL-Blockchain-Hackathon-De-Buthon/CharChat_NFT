@@ -1,11 +1,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, Plus, ChevronRight, ChevronUp } from "lucide-react";
+import { ArrowLeft, Send, Plus, ChevronRight, ChevronUp, Lock, Coins } from "lucide-react";
 import ChatMessage, { ChatMessageProps } from "@/components/ChatMessage";
 import TokenDisplay from "@/components/TokenDisplay";
 import ProgressBar from "@/components/ProgressBar";
 import TokenPriceChart from "@/components/TokenPriceChart";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 // Mock chart data
 const chartData = Array.from({ length: 7 }, (_, i) => ({
@@ -32,6 +34,8 @@ const Chat = () => {
   const [messages, setMessages] = useState<ChatMessageProps[]>(initialMessages);
   const [isInfoVisible, setIsInfoVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [unlockModalVisible, setUnlockModalVisible] = useState(false);
+  const [tokenAmount, setTokenAmount] = useState(1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Mock chatbot data
@@ -42,7 +46,8 @@ const Chat = () => {
     tokenPrice: 1.24,
     rank: 1,
     tokenBalance: 35,
-    tokensForUnlimited: 100
+    tokensForUnlimited: 100,
+    freeMessages: 5
   };
   
   const scrollToBottom = () => {
@@ -55,6 +60,12 @@ const Chat = () => {
   
   const handleSendMessage = () => {
     if (message.trim() === "") return;
+    
+    // Check if user has reached the free message limit
+    if (messages.filter(m => m.sender === "user").length >= chatbot.freeMessages && chatbot.tokenBalance < chatbot.tokensForUnlimited) {
+      setUnlockModalVisible(true);
+      return;
+    }
     
     // Add user message
     const userMessage: ChatMessageProps = {
@@ -93,6 +104,17 @@ const Chat = () => {
   
   const handleProfileClick = () => {
     navigate(`/token/${id}`);
+  };
+  
+  const handleBuyTokens = () => {
+    toast.success(`You purchased ${tokenAmount} tokens successfully!`);
+    setUnlockModalVisible(false);
+    
+    // In a real app, you would update the user's token balance here
+    // For now, we'll just simulate this
+    setTimeout(() => {
+      handleSendMessage();
+    }, 500);
   };
   
   return (
@@ -151,7 +173,9 @@ const Chat = () => {
               showLabel
             />
             <div className="text-xs text-muted-foreground mt-1 text-center">
-              {chatbot.tokensForUnlimited - chatbot.tokenBalance} more tokens for unlimited chats
+              {chatbot.tokenBalance >= chatbot.tokensForUnlimited 
+                ? "Unlimited chats unlocked!" 
+                : `${chatbot.tokensForUnlimited - chatbot.tokenBalance} more tokens for unlimited chats`}
             </div>
           </div>
           
@@ -193,6 +217,16 @@ const Chat = () => {
               </div>
             </div>
           )}
+          
+          {/* Free message limit indicator */}
+          {messages.filter(m => m.sender === "user").length < chatbot.freeMessages && chatbot.tokenBalance < chatbot.tokensForUnlimited && (
+            <div className="flex justify-center my-4">
+              <div className="bg-white/5 rounded-full px-3 py-1 text-xs text-muted-foreground flex items-center">
+                <span>{chatbot.freeMessages - messages.filter(m => m.sender === "user").length} free messages remaining</span>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -225,6 +259,77 @@ const Chat = () => {
           </div>
         </div>
       </div>
+      
+      {/* Chat-Unlock Modal */}
+      {unlockModalVisible && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="glass max-w-md w-full p-6 rounded-xl">
+            <div className="flex items-center justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-token-purple/20 flex items-center justify-center mb-2">
+                <Lock size={32} className="text-token-purple" />
+              </div>
+            </div>
+            
+            <h3 className="text-xl font-bold text-center mb-2">Chat Limit Reached</h3>
+            
+            <p className="text-muted-foreground text-center mb-6">
+              You've used all your free messages with this chatbot. Buy tokens to continue chatting.
+            </p>
+            
+            <div className="glass border border-token-purple/20 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <Coins size={20} className="text-token-purple mr-2" />
+                  <span className="font-medium">Tokens to Purchase</span>
+                </div>
+                <div className="flex items-center">
+                  <button 
+                    onClick={() => setTokenAmount(prev => Math.max(1, prev - 1))}
+                    className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center"
+                    disabled={tokenAmount <= 1}
+                  >
+                    -
+                  </button>
+                  <span className="mx-3 font-medium">{tokenAmount}</span>
+                  <button 
+                    onClick={() => setTokenAmount(prev => prev + 1)}
+                    className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex justify-between text-sm p-2 bg-white/5 rounded-lg">
+                <span>Total Cost</span>
+                <span className="font-medium">${(tokenAmount * chatbot.tokenPrice).toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => setUnlockModalVisible(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1 bg-token-purple hover:bg-token-purple/90" 
+                onClick={handleBuyTokens}
+              >
+                Buy Tokens
+              </Button>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-white/10 text-center">
+              <p className="text-xs text-muted-foreground">
+                Need more? <a href={`/token/${id}`} className="text-token-purple">Visit the token page</a> to buy in bulk.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
