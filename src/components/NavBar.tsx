@@ -1,6 +1,7 @@
 
 import { Home, ShoppingCart, MessageSquare, Bell, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import MetamaskWallet from "./MetamaskWallet";
 
 const NavBar = () => {
   const location = useLocation();
@@ -30,6 +31,10 @@ const NavBar = () => {
         <Bell size={24} />
         <span className="text-xs">Alerts</span>
       </Link>
+
+      <div className="fixed top-4 right-4">
+        <MetamaskWallet />
+      </div>
     </div>
   );
 };

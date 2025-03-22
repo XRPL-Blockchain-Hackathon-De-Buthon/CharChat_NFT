@@ -8,6 +8,7 @@ export interface ChatMessageProps {
   timestamp: Date;
   botName?: string;
   botImage?: string;
+  onProfileClick?: () => void;
 }
 
 const ChatMessage = ({ 
@@ -15,7 +16,8 @@ const ChatMessage = ({
   sender, 
   timestamp,
   botName,
-  botImage
+  botImage,
+  onProfileClick
 }: ChatMessageProps) => {
   const [visible, setVisible] = useState(false);
   
@@ -34,7 +36,10 @@ const ChatMessage = ({
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 transition-opacity duration-300 ease-out ${visible ? 'opacity-100' : 'opacity-0'}`}
     >
       {!isUser && botImage && (
-        <div className="h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
+        <div 
+          className={`h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0 ${onProfileClick ? 'cursor-pointer hover:ring-2 ring-white/20' : ''}`}
+          onClick={onProfileClick}
+        >
           <img src={botImage} alt={botName} className="h-full w-full object-cover" />
         </div>
       )}

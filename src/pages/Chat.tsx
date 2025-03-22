@@ -91,6 +91,10 @@ const Chat = () => {
     }
   };
   
+  const handleProfileClick = () => {
+    navigate(`/token/${id}`);
+  };
+  
   return (
     <div className="min-h-screen flex flex-col bg-background animate-fade-in">
       {/* Header */}
@@ -104,7 +108,10 @@ const Chat = () => {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full overflow-hidden">
+            <div 
+              className="h-8 w-8 rounded-full overflow-hidden cursor-pointer"
+              onClick={handleProfileClick}
+            >
               <img 
                 src={chatbot.image} 
                 alt={chatbot.name}
@@ -155,7 +162,10 @@ const Chat = () => {
           
           <TokenPriceChart data={chartData} height={60} />
           
-          <button className="w-full py-2 mt-3 bg-token-purple rounded-lg text-sm font-medium">
+          <button 
+            className="w-full py-2 mt-3 bg-token-purple rounded-lg text-sm font-medium"
+            onClick={() => navigate(`/token/${id}`)}
+          >
             Buy More Tokens
           </button>
         </div>
@@ -165,7 +175,11 @@ const Chat = () => {
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="max-w-3xl mx-auto">
           {messages.map((msg) => (
-            <ChatMessage key={msg.id} {...msg} />
+            <ChatMessage 
+              key={msg.id} 
+              {...msg} 
+              onProfileClick={msg.sender === "bot" ? handleProfileClick : undefined}
+            />
           ))}
           
           {isLoading && (

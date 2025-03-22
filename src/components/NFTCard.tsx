@@ -1,6 +1,7 @@
 
 import { User } from "lucide-react";
 import TokenDisplay from "./TokenDisplay";
+import { useNavigate } from "react-router-dom";
 
 interface NFTCardProps {
   id: string;
@@ -9,7 +10,6 @@ interface NFTCardProps {
   price: number;
   creator: string;
   ownershipType: "nft" | "token";
-  onClick?: () => void;
 }
 
 const NFTCard = ({
@@ -18,13 +18,22 @@ const NFTCard = ({
   image,
   price,
   creator,
-  ownershipType,
-  onClick
+  ownershipType
 }: NFTCardProps) => {
+  const navigate = useNavigate();
+  
+  const handleClick = () => {
+    if (ownershipType === "nft") {
+      navigate(`/nft/${id}`);
+    } else {
+      navigate(`/token/${id}`);
+    }
+  };
+  
   return (
     <div 
       className="glass card-hover overflow-hidden flex flex-col"
-      onClick={onClick}
+      onClick={handleClick}
     >
       <div className="relative h-40 overflow-hidden">
         <img
@@ -53,7 +62,13 @@ const NFTCard = ({
           ) : (
             <div className="flex justify-between items-center">
               <TokenDisplay amount={price} size="sm" />
-              <button className="bg-white/10 hover:bg-white/15 transition-colors py-1 px-2 rounded text-xs font-medium">
+              <button 
+                className="bg-white/10 hover:bg-white/15 transition-colors py-1 px-2 rounded text-xs font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Buy token logic here
+                }}
+              >
                 Buy
               </button>
             </div>

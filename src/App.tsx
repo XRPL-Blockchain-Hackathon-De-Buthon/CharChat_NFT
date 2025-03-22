@@ -13,6 +13,8 @@ import Marketplace from "./pages/Marketplace";
 import MyChatbots from "./pages/MyChatbots";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+import NFTDetail from "./pages/NFTDetail";
+import TokenDetail from "./pages/TokenDetail";
 
 // Components
 import NavBar from "./components/NavBar";
@@ -57,6 +59,8 @@ const App = () => (
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/my-chatbots" element={<MyChatbots />} />
             <Route path="/notifications" element={<Notifications />} />
+            <Route path="/nft/:id" element={<NFTDetail />} />
+            <Route path="/token/:id" element={<TokenDetail />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>
