@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,6 +19,8 @@ import ChatbotDetails from "./pages/ChatbotDetails";
 
 // Components
 import NavBar from "./components/NavBar";
+import AIChatbotNFTTest from "./components/AIChatbotNFTTest";
+import ChatbotTokenTest from "./components/ChatbotTokenTest";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,8 @@ const App = () => (
             <Route path="/token/:id" element={<TokenDetail />} />
             <Route path="/create-chatbot" element={<CreateChatbot />} />
             <Route path="/chatbot/:id" element={<ChatbotDetails />} />
+            <Route path="/test/nft" element={<AIChatbotNFTTest />} />
+            <Route path="/test/token" element={<ChatbotTokenTest />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

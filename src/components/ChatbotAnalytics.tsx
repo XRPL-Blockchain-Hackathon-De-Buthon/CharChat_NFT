@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Coins, Users, MessageSquare, TrendingUp, Clock, ChevronDown } from 'lucide-react';
+import { Coins, Users, MessageSquare, TrendingUp, Clock, ChevronDown, ImageIcon } from 'lucide-react';
 import TokenPriceChart from './TokenPriceChart';
 import { Button } from './ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from './ui/drawer';
+import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from "recharts";
 
 interface ChatbotAnalyticsProps {
     id: string;
@@ -61,48 +62,49 @@ const ChatbotAnalytics = ({
     const [activeTimeframe, setActiveTimeframe] = useState<'1W' | '1M' | '3M' | '1Y'>('1M');
     const [activeChart, setActiveChart] = useState<'price' | 'users' | 'messages'>('price');
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [imageError, setImageError] = useState(false);
 
     const userGrowthData = generateUserGrowthData(30, userCount - Math.round(userCount * 0.3));
     const messagesData = generateMessagesData(30, messagesPerDay);
 
+    // Safely format large numbers with commas
+    const formatNumber = (num: number) => {
+        return new Intl.NumberFormat().format(num);
+    };
+
+    // Determine if image is data URL and potentially large
+    const isDataUrl = image && image.startsWith('data:image');
+    const isLargeImage = isDataUrl && image.length > 500000; // ~375KB
+
     return (
         <div className="glass p-6 rounded-xl">
             <div className="flex flex-col md:flex-row gap-6">
-                <div className="w-full md:w-1/3">
-                    <div className="aspect-square rounded-xl overflow-hidden mb-4">
-                        <img src={image} alt={name} className="w-full h-full object-cover" />
-                    </div>
-
-                    <h1 className="text-xl font-bold mb-2">{name}</h1>
-
-                    <div className="glass p-4 rounded-xl mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-muted-foreground">Token Price</span>
-                            <div className="flex items-center gap-1 text-lg font-medium text-token-purple">
-                                <Coins size={16} />
-                                {tokenPrice.toFixed(2)}
+                <div className="relative w-full md:w-64 h-64 overflow-hidden rounded-xl flex-shrink-0">
+                    {!imageError ? (
+                        <img 
+                            src={image} 
+                            alt={name} 
+                            className={`w-full h-full object-cover ${isLargeImage ? 'blur-sm animate-pulse' : ''}`}
+                            onError={() => setImageError(true)}
+                            loading="lazy"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-800/50">
+                            <div className="flex flex-col items-center text-gray-400">
+                                <ImageIcon size={48} className="mb-3 opacity-50" />
+                                <span className="text-center px-4">{name}</span>
                             </div>
                         </div>
-
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">24h Change</span>
-                            <div
-                                className={`flex items-center gap-1 ${
-                                    priceChange >= 0 ? 'text-green-500' : 'text-red-500'
-                                }`}
-                            >
-                                <TrendingUp size={16} />
-                                {Math.abs(priceChange).toFixed(2)}%
+                    )}
+                    
+                    {isLargeImage && !imageError && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                            <div className="flex flex-col items-center">
+                                <div className="animate-spin h-10 w-10 border-t-2 border-white rounded-full mb-2"></div>
+                                <span className="text-xs text-white/80">Loading large image...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <Button
-                        className="w-full bg-red-500 hover:bg-red-500/90 mb-2"
-                        onClick={() => setIsDrawerOpen(true)}
-                    >
-                        Sell this Chatbot
-                    </Button>
+                    )}
                 </div>
 
                 <div className="w-full md:w-2/3">

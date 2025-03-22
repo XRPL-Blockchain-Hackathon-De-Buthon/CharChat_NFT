@@ -7,6 +7,8 @@ import ProgressBar from '@/components/ProgressBar';
 import TokenPriceChart from '@/components/TokenPriceChart';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { getChatbotPromptTemplate } from '@/lib/nftContract';
+import { getSigner } from '@/lib/web3Provider';
 import OpenAI from 'openai';
 
 // Mock chart data
@@ -15,24 +17,27 @@ const chartData = Array.from({ length: 7 }, (_, i) => ({
     price: parseFloat((Math.random() * 1.5 + 0.5).toFixed(2)),
 }));
 
-// Sample chat history
-const initialMessages: ChatMessageProps[] = [
-    {
-        id: '1',
-        content:
-            "Hi there! I'm your creative helper. I can assist with brainstorming, writing, design concepts, and more. What are you working on today?",
-        sender: 'bot',
-        timestamp: new Date(Date.now() - 1000 * 60 * 5),
-        botName: 'Creative Helper',
-        botImage:
-            'https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=774&q=80',
-    },
-];
+// Empty initial messages
+const initialMessages: ChatMessageProps[] = [];
 
+// OpenAI API key from environment variables
 const openai = new OpenAI({
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true, // 브라우저에서 사용하기 위해 필요
+    dangerouslyAllowBrowser: true, // Required for browser usage
 });
+
+// Chatbot type definition
+interface ChatbotData {
+  id: string;
+  name: string;
+  image: string;
+  tokenPrice: number;
+  rank: number;
+  tokenBalance: number;
+  tokensForUnlimited: number;
+  freeMessages: number;
+  systemPrompt: string;
+}
 
 const Chat = () => {
     const { id } = useParams<{ id: string }>();
@@ -44,18 +49,110 @@ const Chat = () => {
     const [unlockModalVisible, setUnlockModalVisible] = useState(false);
     const [tokenAmount, setTokenAmount] = useState(1);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    // Mock chatbot data
-    const chatbot = {
+    
+    // Chatbot data state
+    const [chatbot, setChatbot] = useState<ChatbotData>({
         id: id || '1',
-        name: 'Creative Helper',
-        image: 'https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=774&q=80',
-        tokenPrice: 1.24,
-        rank: 1,
-        tokenBalance: 35,
+        name: 'Loading...',
+        image: '',
+        tokenPrice: 0,
+        rank: 0,
+        tokenBalance: 0,
         tokensForUnlimited: 100,
         freeMessages: 5,
-    };
+        systemPrompt: '',
+    });
+    
+    // User wallet address
+    const [userAddress, setUserAddress] = useState<string>('');
+    
+    // Get user wallet address
+    useEffect(() => {
+        const fetchUserAddress = async () => {
+            try {
+                const signer = await getSigner();
+                if (signer) {
+                    const address = await signer.getAddress();
+                    setUserAddress(address);
+                }
+            } catch (error) {
+                console.error('Wallet connection error:', error);
+                toast.error('Failed to connect wallet. Please check MetaMask.');
+            }
+        };
+        
+        fetchUserAddress();
+    }, []);
+    
+    // Fetch chatbot data
+    useEffect(() => {
+        const fetchChatbotData = async () => {
+            if (!id) return;
+            
+            try {
+                toast.loading('Fetching chatbot data...', { id: 'fetch-chatbot' });
+                
+                // Get prompt template (metadata) from contract
+                const result = await getChatbotPromptTemplate(id);
+                
+                if (result.success && result.promptTemplate) {
+                    try {
+                        // Parse JSON string
+                        const metadata = JSON.parse(result.promptTemplate);
+                        
+                        setChatbot({
+                            id: id,
+                            name: metadata.name || 'Unnamed Chatbot',
+                            image: metadata.image || '',
+                            systemPrompt: metadata.systemPrompt || '',
+                            tokenPrice: 1.24, // Temporary data
+                            rank: 1, // Temporary data
+                            tokenBalance: 35, // Temporary data 
+                            tokensForUnlimited: 100,
+                            freeMessages: metadata.freeMessages || 5,
+                        });
+                        
+                        // Add welcome message
+                        const welcomeMessage: ChatMessageProps = {
+                            id: '1',
+                            content: `Hello! I'm ${metadata.name || 'Chatbot'}. How can I help you today?`,
+                            sender: 'bot',
+                            timestamp: new Date(),
+                            botName: metadata.name || 'Chatbot',
+                            botImage: metadata.image || '',
+                        };
+                        setMessages([welcomeMessage]);
+                        
+                        toast.success('Successfully fetched chatbot data!', { id: 'fetch-chatbot' });
+                    } catch (error) {
+                        console.error('Metadata parsing error:', error);
+                        
+                        // Use original string when metadata parsing fails
+                        setChatbot({
+                            id: id,
+                            name: 'Parse Error',
+                            image: '',
+                            systemPrompt: result.promptTemplate || '',
+                            tokenPrice: 1.24, // Temporary data
+                            rank: 1, // Temporary data
+                            tokenBalance: 35, // Temporary data
+                            tokensForUnlimited: 100,
+                            freeMessages: 5,
+                        });
+                        
+                        toast.error('Failed to parse metadata.', { id: 'fetch-chatbot' });
+                    }
+                } else {
+                    toast.error('Failed to fetch chatbot data.', { id: 'fetch-chatbot' });
+                }
+            } catch (error) {
+                console.error('Chatbot data loading error:', error);
+                toast.error('Failed to fetch chatbot data.', { id: 'fetch-chatbot' });
+            }
+        };
+        
+        fetchChatbotData();
+    }, [id]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -93,7 +190,11 @@ const Chat = () => {
             const completion = await openai.chat.completions.create({
                 model: 'gpt-4',
                 messages: [
-                    { role: 'system', content: 'You are a helpful assistant.' },
+                    { role: 'system', content: chatbot.systemPrompt || 'You are a helpful assistant.' },
+                    ...messages.map(msg => ({
+                        role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+                        content: msg.content
+                    })),
                     { role: 'user', content: message },
                 ],
             });
@@ -112,7 +213,7 @@ const Chat = () => {
             console.error('Error generating response:', error);
             const errorMessage: ChatMessageProps = {
                 id: (Date.now() + 1).toString(),
-                content: 'Sorry, there was an error generating a response.',
+                content: 'Sorry, an error occurred while generating a response.',
                 sender: 'bot',
                 timestamp: new Date(),
                 botName: chatbot.name,

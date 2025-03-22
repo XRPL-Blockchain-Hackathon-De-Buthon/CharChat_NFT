@@ -1,5 +1,4 @@
-
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, X, Bot, Brain, Coins, Check, MessageSquare, Wand, Box, Send, Palette, PlusCircle, Key, Lock, LockOpen, User, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +6,81 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { createNewChatbot } from "@/lib/nftContract";
+import { getSigner } from "@/lib/web3Provider";
+
+// Image compression function - 압축 함수 개선
+const compressImage = (base64Image: string, maxSizeKB: number = 100): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      // 이미지 사이즈 제한 - 최대 1024x1024
+      const maxDimension = 1024;
+      if (width > height && width > maxDimension) {
+        height = Math.round((height * maxDimension) / width);
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = Math.round((width * maxDimension) / height);
+        height = maxDimension;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context is not available'));
+        return;
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // 초기 품질 설정 - 높은 품질에서 시작
+      let quality = 0.9;
+      let result = canvas.toDataURL('image/jpeg', quality);
+      
+      // 크기가 목표보다 크면 점진적으로 품질 낮추기
+      const iterations = 0;
+      const maxIterations = 10;
+      while (result.length > maxSizeKB * 1024 * 1.35 && quality > 0.1 && iterations < maxIterations) {
+        quality -= 0.1;
+        result = canvas.toDataURL('image/jpeg', quality);
+      }
+      
+      // 최종 압축 크기 확인
+      const finalSizeKB = Math.round(result.length * 0.75 / 1024);
+      console.log(`Compressed image from ${base64Image.length * 0.75 / 1024}KB to ${finalSizeKB}KB (quality: ${quality.toFixed(1)})`);
+      
+      resolve(result);
+    };
+    
+    img.onerror = (err) => {
+      reject(err);
+    };
+    
+    img.src = base64Image;
+  });
+};
+
+// Default avatar SVG generation function
+const generateDefaultAvatar = (name: string) => {
+  const initials = name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+  
+  // Generate random background color
+  const colors = ['#3498db', '#9b59b6', '#e74c3c', '#f1c40f', '#1abc9c', '#34495e'];
+  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="${randomColor.replace('#', '%23')}" /><text x="50" y="50" font-family="Arial" font-size="35" fill="white" text-anchor="middle" dominant-baseline="central">${initials}</text></svg>`;
+};
 
 const ChatbotCreator = () => {
   const [step, setStep] = useState(1);
@@ -23,18 +97,94 @@ const ChatbotCreator = () => {
     description: "",
     category: "",
     systemPrompt: "You are a helpful assistant that...",
-    tokenPrice: 100,
+    tokenPrice: 1,
     initialSupply: 10000,
     unlockAmount: 5,
-    freeMessages: 5
+    freeMessages: 5,
+    image: ""
   });
   
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [userAddress, setUserAddress] = useState<string>('');
+  
+  // Get user wallet address
+  useEffect(() => {
+    const fetchUserAddress = async () => {
+      try {
+        const signer = await getSigner();
+        const address = await signer.getAddress();
+        setUserAddress(address);
+      } catch (error) {
+        console.error('Wallet connection error:', error);
+        toast.error('Failed to connect wallet. Please check MetaMask.');
+      }
+    };
+    
+    fetchUserAddress();
+  }, []);
+  
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Add image size validation
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast.error("Image is too large. Please select an image smaller than 5MB.");
+        return;
+      }
+      
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // Check dimensions
+          const maxDimension = 800; // Limit width/height to 800px
+          let width = img.width;
+          let height = img.height;
+          
+          // Resize only if needed
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round(height * (maxDimension / width));
+              width = maxDimension;
+            } else {
+              width = Math.round(width * (maxDimension / height));
+              height = maxDimension;
+            }
+            
+            // Create canvas to resize
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert to more efficient format with quality setting
+              const optimizedImage = canvas.toDataURL('image/jpeg', 0.85);
+              const imageSizeKB = Math.round(optimizedImage.length * 0.75 / 1024);
+              
+              // 중요: imagePreview와 formData.image 모두 업데이트
+              setImagePreview(optimizedImage);
+              setFormData(prev => ({
+                ...prev,
+                image: optimizedImage
+              }));
+              
+              toast.success(`Image optimized to ~${imageSizeKB}KB`);
+              return;
+            }
+          }
+          
+          // If no resize needed or canvas not available
+          const imageData = event.target?.result as string;
+          setImagePreview(imageData); // 여기에도 imagePreview 업데이트 추가
+          setFormData(prev => ({
+            ...prev,
+            image: imageData
+          }));
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -47,14 +197,16 @@ const ChatbotCreator = () => {
   
   const handleRemoveImage = () => {
     setImagePreview(null);
+    // formData의 이미지도 초기화
+    setFormData(prev => ({ ...prev, image: "" }));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
   
   const handleNextStep = () => {
-    if (step === 1 && (!formData.name || !imagePreview || !formData.description || !formData.category)) {
-      toast.error("Please fill all required fields");
+    if (step === 1 && (!formData.name || !formData.description || !formData.category)) {
+      toast.error("Please fill required fields (name, description, and category)");
       return;
     }
     
@@ -87,14 +239,133 @@ const ChatbotCreator = () => {
     }, 1500);
   };
   
-  const handleCreate = () => {
-    // Simulate creation process
-    toast.loading("Creating your chatbot...");
+  const handleCreate = async () => {
+    if (!userAddress) {
+      toast.error('Wallet is not connected. Please check MetaMask.');
+      return;
+    }
     
-    setTimeout(() => {
-      toast.success("Chatbot created successfully!");
-      navigate("/my-chatbots");
-    }, 2000);
+    if (!formData.name || !formData.description || !formData.category || !formData.systemPrompt) {
+      toast.error('Please fill in all required information.');
+      return;
+    }
+    
+    setIsCreating(true);
+    toast.loading('Creating chatbot...', { id: 'creating-chatbot' });
+    
+    try {
+      // Image processing
+      let imageUrl = formData.image || '';
+      
+      if (!imageUrl) {
+        // Generate default avatar if no image provided
+        imageUrl = generateDefaultAvatar(formData.name);
+        console.log('Using default avatar');
+      } else {
+        // Check image size - 이미지 크기 제한 증가 (200KB까지 허용)
+        const imageSizeKB = Math.round(imageUrl.length * 0.75 / 1024);
+        console.log(`Original image size: ~${imageSizeKB}KB`);
+        
+        if (imageSizeKB > 200) {
+          console.log('Large image detected, compressing...');
+          // Compress the image
+          try {
+            toast.loading('Optimizing image...', { id: 'optimizing-image' });
+            imageUrl = await compressImage(imageUrl, 150); // 150KB 목표로 압축
+            const newImageSizeKB = Math.round(imageUrl.length * 0.75 / 1024);
+            console.log(`Compressed image to: ~${newImageSizeKB}KB`);
+            toast.success(`Image optimized to ~${newImageSizeKB}KB`, { id: 'optimizing-image' });
+            
+            // Even after compression, if still too large, use simpler version but with higher limit
+            if (newImageSizeKB > 300) {
+              console.warn('Image still large after compression, generating placeholder');
+              toast.info('Using simplified image to save gas costs');
+              // 이미지가 여전히 너무 크면 아바타 사용하되, 최소 300KB까지는 허용
+              imageUrl = generateDefaultAvatar(formData.name);
+            }
+          } catch (error) {
+            console.error('Image compression error:', error);
+            toast.error('Error processing image, using default avatar', { id: 'optimizing-image' });
+            imageUrl = generateDefaultAvatar(formData.name);
+          }
+        }
+      }
+      
+      // Ensure image is set
+      if (!imageUrl) {
+        console.log('No image available, using placeholder');
+        imageUrl = `https://via.placeholder.com/400x400.png?text=${encodeURIComponent(formData.name)}`;
+      }
+      
+      // Minimize metadata to save gas costs
+      const metadata = JSON.stringify({
+        name: formData.name,
+        description: formData.description.substring(0, 100), // Limit description length
+        category: formData.category,
+        systemPrompt: formData.systemPrompt,
+        image: imageUrl,
+        freeMessages: formData.freeMessages
+      });
+      
+      console.log('Optimized metadata created:', formData.name);
+      
+      // Create new NFT contract (using factory contract)
+      const symbol = formData.name.split(' ').map(word => word[0]).join('').toUpperCase();
+      
+      // Set tokenPrice very low to save gas costs (can be changed later)
+      const veryLowPrice = 0.01; 
+      const result = await createNewChatbot(
+        formData.name,
+        symbol, // Symbol is generated from first letters of name
+        metadata, // Pass metadata directly
+        veryLowPrice, // Start with very low price
+        false // 자동 NFT 민팅 비활성화 - 수동으로 민팅하도록 함
+      );
+      
+      if (result.success) {
+        toast.success('Chatbot created successfully!', { id: 'creating-chatbot' });
+        toast.info(`New chatbot contract address: ${result.chatbotAddress?.substring(0, 10)}...`);
+        
+        // NFT 민팅이 필요함을 사용자에게 알리는 메시지 추가
+        if (result.chatbotAddress) {
+          toast.info('Please mint NFT in the Chatbot Details page to enable prompt editing');
+          
+          // Navigate to chat page immediately after success (only if address is available)
+          navigate(`/chatbot/${result.chatbotAddress}`);
+        } else {
+          navigate("/my-chatbots");
+        }
+      } else {
+        console.error('Chatbot creation failed:', result.error);
+        let errorMessage = 'Failed to create chatbot.';
+        
+        // Handle specific error messages
+        if (result.error && typeof result.error === 'object') {
+          const errorString = String(result.error);
+          if (errorString.includes("user rejected transaction")) {
+            errorMessage = 'User rejected transaction.';
+          } else if (errorString.includes("insufficient funds")) {
+            errorMessage = 'Insufficient funds for gas fees.';
+          }
+        }
+        
+        toast.error(errorMessage, { id: 'creating-chatbot' });
+      }
+    } catch (error) {
+      console.error('Chatbot creation error:', error);
+      let errorMessage = 'Error occurred while creating chatbot.';
+      
+      if (error instanceof Error) {
+        console.log('Error message:', error.message);
+        if (error.message.includes("user rejected transaction")) {
+          errorMessage = 'User rejected transaction.';
+        }
+      }
+      
+      toast.error(errorMessage, { id: 'creating-chatbot' });
+    } finally {
+      setIsCreating(false);
+    }
   };
   
   return (
@@ -156,9 +427,9 @@ const ChatbotCreator = () => {
             
             <div>
               <Label htmlFor="chatbotImage" className="block text-sm font-medium mb-2">Chatbot Image</Label>
-              {imagePreview ? (
+              {formData.image ? (
                 <div className="relative w-40 h-40 rounded-xl overflow-hidden group">
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
                   <button 
                     onClick={handleRemoveImage}
                     className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -177,7 +448,7 @@ const ChatbotCreator = () => {
                     type="file" 
                     className="hidden" 
                     accept="image/*"
-                    onChange={handleImageUpload}
+                    onChange={handleImageChange}
                   />
                 </label>
               )}
@@ -532,9 +803,10 @@ const ChatbotCreator = () => {
             </Button>
             <Button 
               onClick={handleCreate}
+              disabled={isCreating}
               className="bg-token-purple hover:bg-token-purple/90 px-8"
             >
-              Create Chatbot
+              {isCreating ? 'Creating...' : 'Create Chatbot'}
             </Button>
           </div>
         </div>

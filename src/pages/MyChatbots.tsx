@@ -1,9 +1,11 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, ArrowUp, ArrowDown, Sparkles, MessageSquare, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ChatbotCard, { ChatbotCardProps } from "@/components/ChatbotCard";
 import TokenDisplay from "@/components/TokenDisplay";
+import { getNFTOwner, getPromptTemplate, getUserChatbots, getChatbotPromptTemplate, NFT_CONTRACT_ADDRESS } from "@/lib/nftContract";
+import { getSigner } from "@/lib/web3Provider";
+import { toast } from "sonner";
 
 type UserMode = "creator" | "user";
 
@@ -60,14 +62,173 @@ const myOwnedTokens = [
 
 const MyChatbots = () => {
   const [mode, setMode] = useState<UserMode>("user");
+  const [isLoading, setIsLoading] = useState(false);
+  const [userAddress, setUserAddress] = useState<string>('');
+  const [createdChatbots, setCreatedChatbots] = useState<ChatbotCardProps[]>([]);
+  const [isNFTOwner, setIsNFTOwner] = useState(false);
   const navigate = useNavigate();
+  
+  // Get user wallet address
+  useEffect(() => {
+    const fetchUserAddress = async () => {
+      try {
+        const signer = await getSigner();
+        const address = await signer.getAddress();
+        setUserAddress(address);
+      } catch (error) {
+        console.error('Wallet connection error:', error);
+        toast.error('Failed to connect wallet. Please check MetaMask.');
+      }
+    };
+    
+    fetchUserAddress();
+  }, []);
+  
+  // Fetch list of chatbots created by the user
+  useEffect(() => {
+    const fetchUserChatbots = async () => {
+      if (!userAddress) return;
+      
+      try {
+        setIsLoading(true);
+        
+        // Get all chatbot addresses created by the user through the factory contract
+        const result = await getUserChatbots(userAddress);
+        
+        if (result.success && result.chatbots && result.chatbots.length > 0) {
+          console.log('User chatbot list:', result.chatbots);
+          
+          // Get metadata for each chatbot contract
+          const chatbotPromises = result.chatbots.map(async (address, index) => {
+            try {
+              const promptResult = await getChatbotPromptTemplate(address);
+              
+              if (promptResult.success && promptResult.promptTemplate) {
+                try {
+                  // Parse metadata stored as JSON string
+                  console.log(`Chatbot ${index + 1} prompt template received:`, promptResult.promptTemplate.substring(0, 100) + '...');
+                  
+                  let metadata;
+                  try {
+                    metadata = JSON.parse(promptResult.promptTemplate);
+                    console.log(`Chatbot ${index + 1} metadata parsing successful`);
+                  } catch (parseError) {
+                    console.error('JSON parsing error, using template directly:', parseError);
+                    // Use template itself as part of metadata when parsing fails
+                    metadata = {
+                      name: `Chatbot ${index + 1}`,
+                      description: promptResult.promptTemplate.substring(0, 100) + '...',
+                      systemPrompt: promptResult.promptTemplate
+                    };
+                  }
+                  
+                  // Create chatbot card data from metadata
+                  return {
+                    id: address, // Use contract address as ID
+                    name: metadata.name || `Chatbot ${index + 1}`,
+                    image: metadata.image || `https://via.placeholder.com/400x400.png?text=${encodeURIComponent(metadata.name || `Chatbot ${index + 1}`)}`,
+                    tokenPrice: 0.5, // Example price
+                    rankChange: 0,
+                    rank: 999
+                  } as ChatbotCardProps;
+                } catch (error) {
+                  console.error(`Chatbot ${index + 1} metadata parsing error:`, error);
+                  // Return default chatbot data even if error occurs
+                  return {
+                    id: address,
+                    name: `Chatbot ${index + 1}`,
+                    image: `https://via.placeholder.com/400x400.png?text=Chatbot+${index + 1}`,
+                    tokenPrice: 0.5,
+                    rankChange: 0,
+                    rank: 999
+                  } as ChatbotCardProps;
+                }
+              } else {
+                // Use default values if prompt template retrieval fails
+                return {
+                  id: address,
+                  name: `Chatbot ${index + 1}`,
+                  image: `https://via.placeholder.com/400x400.png?text=Chatbot+${index + 1}`,
+                  tokenPrice: 0.5,
+                  rankChange: 0,
+                  rank: 999
+                } as ChatbotCardProps;
+              }
+            } catch (error) {
+              console.error(`Error retrieving chatbot ${index + 1} information:`, error);
+              return null;
+            }
+          });
+          
+          const chatbots = (await Promise.all(chatbotPromises)).filter(Boolean) as ChatbotCardProps[];
+          setCreatedChatbots(chatbots);
+          console.log('Created chatbot card data:', chatbots);
+        } else {
+          // Check single NFT contract ownership logic
+          const ownerResult = await getNFTOwner();
+          
+          if (ownerResult.success && ownerResult.owner) {
+            const isOwner = ownerResult.owner.toLowerCase() === userAddress.toLowerCase();
+            setIsNFTOwner(isOwner);
+            
+            if (isOwner) {
+              const promptResult = await getPromptTemplate();
+              
+              if (promptResult.success && promptResult.promptTemplate) {
+                try {
+                  console.log('Existing NFT prompt template received:', promptResult.promptTemplate.substring(0, 100) + '...');
+                  
+                  let metadata;
+                  try {
+                    metadata = JSON.parse(promptResult.promptTemplate);
+                    console.log('Metadata parsing successful');
+                  } catch (parseError) {
+                    console.error('JSON parsing error, using template directly:', parseError);
+                    metadata = {
+                      name: "My Chatbot",
+                      description: promptResult.promptTemplate.substring(0, 100) + '...',
+                      systemPrompt: promptResult.promptTemplate
+                    };
+                  }
+                  
+                  const newChatbot: ChatbotCardProps = {
+                    id: NFT_CONTRACT_ADDRESS, // Existing NFT contract address
+                    name: metadata.name || "My Chatbot",
+                    image: metadata.image || "https://via.placeholder.com/400x400.png?text=AI+Chatbot",
+                    tokenPrice: 0.5,
+                    rankChange: 0,
+                    rank: 999
+                  };
+                  
+                  console.log('Existing NFT chatbot data created:', newChatbot.name);
+                  setCreatedChatbots([newChatbot]);
+                } catch (error) {
+                  console.error('Chatbot metadata parsing error:', error);
+                  setCreatedChatbots([{
+                    id: "1",
+                    name: "My Chatbot",
+                    image: "https://via.placeholder.com/400x400.png?text=My+Chatbot",
+                    tokenPrice: 0.5,
+                    rankChange: 0,
+                    rank: 999
+                  }]);
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error retrieving chatbot list:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUserChatbots();
+  }, [userAddress]);
   
   const handleCreateChatbot = () => {
     navigate("/create-chatbot");
-  };
-  
-  const handleChatbotClick = (id: string) => {
-    navigate(`/chatbot/${id}`);
   };
   
   return (
@@ -115,17 +276,26 @@ const MyChatbots = () => {
             </button>
           </div>
           
-          <h2 className="text-lg font-medium mb-4">My Created Chatbots</h2>
+          <h2 className="text-lg font-medium mb-4">
+            My Created Chatbots
+            {isLoading && <span className="text-sm ml-2 text-muted-foreground">(Loading...)</span>}
+          </h2>
           
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {myCreatedChatbots.map((chatbot) => (
-              <div key={chatbot.id} onClick={() => handleChatbotClick(chatbot.id)} className="cursor-pointer">
+            {!isLoading && createdChatbots.length > 0 && createdChatbots.map((chatbot) => (
+              <div key={chatbot.id} className="cursor-pointer">
+                <ChatbotCard {...chatbot} />
+              </div>
+            ))}
+            
+            {!isLoading && createdChatbots.length === 0 && !isNFTOwner && myCreatedChatbots.map((chatbot) => (
+              <div key={chatbot.id} className="cursor-pointer">
                 <ChatbotCard {...chatbot} />
               </div>
             ))}
           </div>
           
-          {myCreatedChatbots.length === 0 && (
+          {!isLoading && createdChatbots.length === 0 && isNFTOwner === false && myCreatedChatbots.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">You haven't created any chatbots yet</p>
             </div>
