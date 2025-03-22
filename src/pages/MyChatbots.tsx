@@ -1,6 +1,7 @@
 
 import { useState } from "react";
-import { Plus, ArrowUp, ArrowDown, Sparkles, MessageSquare } from "lucide-react";
+import { Plus, ArrowUp, ArrowDown, Sparkles, MessageSquare, BarChart3 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import ChatbotCard, { ChatbotCardProps } from "@/components/ChatbotCard";
 import TokenDisplay from "@/components/TokenDisplay";
 
@@ -59,6 +60,15 @@ const myOwnedTokens = [
 
 const MyChatbots = () => {
   const [mode, setMode] = useState<UserMode>("user");
+  const navigate = useNavigate();
+  
+  const handleCreateChatbot = () => {
+    navigate("/create-chatbot");
+  };
+  
+  const handleChatbotClick = (id: string) => {
+    navigate(`/chatbot/${id}`);
+  };
   
   return (
     <div className="min-h-screen pb-20 animate-fade-in">
@@ -91,12 +101,15 @@ const MyChatbots = () => {
       {/* Creator Mode UI */}
       {mode === "creator" && (
         <section className="px-4 mt-8">
-          <div className="glass p-6 rounded-xl mb-8">
+          <div className="glass p-6 rounded-xl mb-8 bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
             <h2 className="text-lg font-medium mb-2">Create New Chatbot</h2>
             <p className="text-sm text-muted-foreground mb-4">
               Build your own chatbot, set rules and earn tokens when others chat with it
             </p>
-            <button className="bg-token-purple hover:bg-token-purple/90 transition-colors w-full py-3 rounded-lg text-white flex items-center justify-center gap-2">
+            <button 
+              className="bg-token-purple hover:bg-token-purple/90 transition-colors w-full py-3 rounded-lg text-white flex items-center justify-center gap-2"
+              onClick={handleCreateChatbot}
+            >
               <Plus size={20} />
               <span className="font-medium">Create New Chatbot</span>
             </button>
@@ -106,7 +119,9 @@ const MyChatbots = () => {
           
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {myCreatedChatbots.map((chatbot) => (
-              <ChatbotCard key={chatbot.id} {...chatbot} />
+              <div key={chatbot.id} onClick={() => handleChatbotClick(chatbot.id)} className="cursor-pointer">
+                <ChatbotCard {...chatbot} />
+              </div>
             ))}
           </div>
           
@@ -148,11 +163,21 @@ const MyChatbots = () => {
                   <div className="flex items-center justify-between mt-1">
                     <TokenDisplay amount={token.tokenBalance} size="md" />
                     <div className="flex gap-2">
-                      <button className="bg-white/10 hover:bg-white/15 transition-colors py-1 px-3 rounded text-xs font-medium flex items-center gap-1">
+                      <button className="bg-white/10 hover:bg-white/15 transition-colors py-1 px-3 rounded text-xs font-medium flex items-center gap-1"
+                        onClick={() => navigate(`/token/${token.id}`)}
+                      >
                         <Sparkles size={12} />
                         <span>Buy</span>
                       </button>
-                      <button className="bg-token-purple hover:bg-token-purple/90 transition-colors py-1 px-3 rounded text-xs font-medium flex items-center gap-1">
+                      <button className="bg-white/10 hover:bg-white/15 transition-colors py-1 px-3 rounded text-xs font-medium flex items-center gap-1"
+                        onClick={() => navigate(`/token/${token.id}`)}
+                      >
+                        <BarChart3 size={12} />
+                        <span>Analytics</span>
+                      </button>
+                      <button className="bg-token-purple hover:bg-token-purple/90 transition-colors py-1 px-3 rounded text-xs font-medium flex items-center gap-1"
+                        onClick={() => navigate(`/chat/${token.id}`)}
+                      >
                         <MessageSquare size={12} />
                         <span>Chat</span>
                       </button>
@@ -166,7 +191,10 @@ const MyChatbots = () => {
           {myOwnedTokens.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">You don't own any tokens yet</p>
-              <button className="mt-4 bg-token-purple hover:bg-token-purple/90 transition-colors px-4 py-2 rounded-lg text-white text-sm">
+              <button 
+                className="mt-4 bg-token-purple hover:bg-token-purple/90 transition-colors px-4 py-2 rounded-lg text-white text-sm"
+                onClick={() => navigate("/marketplace")}
+              >
                 Explore Marketplace
               </button>
             </div>

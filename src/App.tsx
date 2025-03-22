@@ -15,6 +15,8 @@ import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 import NFTDetail from "./pages/NFTDetail";
 import TokenDetail from "./pages/TokenDetail";
+import CreateChatbot from "./pages/CreateChatbot";
+import ChatbotDetails from "./pages/ChatbotDetails";
 
 // Components
 import NavBar from "./components/NavBar";
@@ -61,6 +63,8 @@ const App = () => (
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/nft/:id" element={<NFTDetail />} />
             <Route path="/token/:id" element={<TokenDetail />} />
+            <Route path="/create-chatbot" element={<CreateChatbot />} />
+            <Route path="/chatbot/:id" element={<ChatbotDetails />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>
