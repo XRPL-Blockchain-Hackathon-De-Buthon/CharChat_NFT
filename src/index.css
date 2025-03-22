@@ -91,7 +91,7 @@
   }
   
   .chatbot-card {
-    @apply glass p-4 rounded-xl flex flex-col h-full transition-all duration-300 hover:bg-white/8 border border-white/10;
+    @apply glass p-4 rounded-xl flex flex-col h-full transition-all duration-300 hover:bg-white/10 border border-white/10;
   }
   
   .progress-bar {
@@ -106,4 +106,3 @@
     @apply flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium;
   }
 }
-
